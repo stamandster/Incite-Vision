@@ -14,7 +14,7 @@ Incite Vision is a virtual camera manager that allows content creators, streamer
 - **Webcam Capture**: Live webcam feed at configurable resolution
 - **Screen Capture**: Full screen or specific monitor selection
 - **Instant Source Switching**: Toggle between webcam/screen via global hotkey (<100ms latency)
-- **Auto-Driver Installation**: Automatic UnityCapture/OBS driver setup
+- **Auto-Driver Installation**: Automatic setup for [Unity Video Capture](https://github.com/istante/UnityCapture) or [OBS Virtual Camera](https://github.com/obsproject/obs-studio)
 - **System Tray Integration**: Minimize to tray with accessible controls
 - **Auto-Start**: Launch with Windows for hands-free operation
 - **Performance**: 60 FPS steady performance with <50MB RAM usage
