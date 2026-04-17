@@ -6,7 +6,7 @@ A Windows desktop application providing high-performance virtual camera manageme
 
 Incite Vision is a virtual camera manager that allows content creators, streamers, and professionals to switch between webcam and screen capture sources instantly via hotkey. The application creates a system-wide virtual camera visible to all video conferencing, streaming, and recording applications.
 
-![Incite Vision Screenshot](docs/images/screenshot.png) <!-- Add screenshot if available -->
+![Incite Vision Screenshot](screenshot.png)
 
 ## Features
 
