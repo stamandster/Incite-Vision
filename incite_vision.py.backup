@@ -1150,10 +1150,8 @@ def create_app_class():
                         self.after(0, self.deiconify),
                         self.after(0, lambda: self.state("normal")),
                         self.after(0, lambda: setattr(self, "_minimized_to_tray", False)),
-                    ),  # Left-click shows window
+                    ),
                 )
-                # Override double-click to toggle between webcam and screen
-                self.tray_icon._on_double_click = lambda icon: self.after(0, self._on_toggle_source)
                 self.tray_icon.menu = self.tray_icon._get_menu(self)
                 self.tray_thread = threading.Thread(target=self.tray_icon.run, daemon=True)
                 self.tray_thread.start()
