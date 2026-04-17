@@ -1,0 +1,10 @@
+pyvirtualcam>=0.11.1
+opencv-python>=4.8.0
+mss>=9.0.1
+keyboard>=0.13.5
+cv2-enumerate-cameras>=1.1.0
+numpy>=1.24.0
+customtkinter>=5.2.0
+pystray>=0.19.4
+Pillow>=10.0.0
+pywin32>=306
