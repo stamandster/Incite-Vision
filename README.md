@@ -50,9 +50,9 @@ Detailed documentation is available in the [`docs/`](./docs) directory:
    python incite_vision.py
    ```
    Or use the built executable:
-   ```bash
-   dist/InciteVision.exe
-   ```
+    ```bash
+    dist/incite_vision.exe
+    ```
 
 ### Usage
 
