@@ -473,8 +473,6 @@ class ScreenCaptureThread(threading.Thread):
                     screenshot = sct.grab(monitor)
                     frame = np.array(screenshot)
                     frame = cv2.cvtColor(frame, cv2.COLOR_BGRA2BGR)
-                    if frame.shape[1] != self.target_width or frame.shape[0] != self.target_height:
-                        frame = letterbox_fit(frame, self.target_width, self.target_height)
                     with self._lock:
                         self._frame = frame
                 except Exception as e:
