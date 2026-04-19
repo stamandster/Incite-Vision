@@ -773,8 +773,8 @@ def create_app_class():
             ctk.set_default_color_theme("dark-blue")
 
             self.title(APP_NAME)
-            self.geometry("720x650")
-            self.minsize(680, 600)
+            self.geometry("800x750")
+            self.minsize(750, 700)
             self.configure(fg_color=BG_DARK)
             self.protocol("WM_DELETE_WINDOW", self.on_window_close)
             self._build_layout()
