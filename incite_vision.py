@@ -49,6 +49,7 @@ if not SETTINGS_FILE.exists():
         "hotkey": "ctrl+alt+s",
         "virtual_backend": "auto",
         "active_source": "webcam",
+        "preferred_image": "",
         "start_with_windows": False,
         "auto_start_on_load": False,
         "start_minimized": False,
@@ -94,6 +95,7 @@ class Settings:
     hotkey: str = "ctrl+alt+s"
     virtual_backend: str = "auto"
     active_source: str = "webcam"
+    preferred_image: str = ""
     start_with_windows: bool = False
     auto_start_on_load: bool = False
     start_minimized: bool = False
@@ -376,6 +378,21 @@ def generate_offline_frame(width: int, height: int):
                 cv2.FONT_HERSHEY_SIMPLEX, 1.0, (200, 200, 200), 2, cv2.LINE_AA)
     return frame
 
+def generate_black_frame(width: int, height: int):
+    return np.zeros((height, width, 3), dtype=np.uint8)
+
+def load_image_file(filepath: str, width: int, height: int):
+    if not filepath or not os.path.exists(filepath):
+        return None
+    try:
+        img = cv2.imread(filepath)
+        if img is None:
+            return None
+        return letterbox_fit(img, width, height)
+    except Exception as e:
+        logger.warning("Failed to load image %s: %s", filepath, e)
+        return None
+
 class WebcamThread(threading.Thread):
     def __init__(self, camera_index: int, width: int, height: int):
         super().__init__(daemon=True)
@@ -482,6 +499,16 @@ class VirtualCameraManager:
         self._lock = threading.Lock()
         self.on_status = on_status
         self._warmup_end = 0.0
+        self._image_frame = None
+        self._load_image_frame()
+
+    def _load_image_frame(self):
+        if self.settings.preferred_image:
+            self._image_frame = load_image_file(self.settings.preferred_image, self.width, self.height)
+            if self._image_frame is not None:
+                logger.info("Loaded image from %s", self.settings.preferred_image)
+            else:
+                logger.warning("Failed to load image from %s, will use black", self.settings.preferred_image)
 
     def initialize(self):
         logger.info("Initializing at %dx%d", self.width, self.height)
@@ -574,8 +601,31 @@ class VirtualCameraManager:
         if source == "webcam" and self.webcam_thread and self.webcam_thread.available:
             return self.webcam_thread.get_frame()
         elif source == "screen" and self.screen_thread:
-            return self.screen_thread.get_frame()
+            screen_frame = self.screen_thread.get_frame()
+            if screen_frame is not None:
+                return screen_frame
+        elif source == "image":
+            if self._image_frame is not None:
+                return self._image_frame
+            return generate_black_frame(self.width, self.height)
         return None
+
+    def switch_to_source(self, source: str):
+        with self._lock:
+            if self.transitioning:
+                return
+            if source not in ("webcam", "screen", "image"):
+                return
+            if source == "webcam" and (not self.webcam_thread or not self.webcam_thread.available):
+                if self.on_status:
+                    self.on_status("warning", "Webcam not available")
+                return
+            self.target_source = source
+            self.transitioning = True
+            self.transition_start = time.time()
+            logger.info("Switching to '%s'", source)
+            if self.on_status:
+                self.on_status("transition", f"Switching to {source}")
 
     def _resize(self, frame):
         return letterbox_fit(frame, self.width, self.height)
@@ -666,7 +716,10 @@ class VirtualCameraManager:
         self._running = True
         self._warmup_end = time.time() + 3.0
         keyboard.add_hotkey(self.settings.hotkey, self.handle_hotkey, suppress=True)
-        logger.info("Hotkey registered: %s", self.settings.hotkey)
+        keyboard.add_hotkey("ctrl+alt+1", lambda: self.switch_to_source("webcam"), suppress=True)
+        keyboard.add_hotkey("ctrl+alt+2", lambda: self.switch_to_source("screen"), suppress=True)
+        keyboard.add_hotkey("ctrl+alt+3", lambda: self.switch_to_source("image"), suppress=True)
+        logger.info("Hotkeys registered: %s, Ctrl+Alt+1/2/3", self.settings.hotkey)
         frame_interval = 1.0 / TARGET_FPS
         try:
             while self._running:
@@ -683,6 +736,9 @@ class VirtualCameraManager:
                     elif self.current_source == "screen" and self.webcam_thread and self.webcam_thread.available:
                         self.current_source = "webcam"
                         frame = self._get_frame_for_source("webcam")
+                    elif self.current_source in ("webcam", "screen") and self._image_frame is not None:
+                        self.current_source = "image"
+                        frame = self._image_frame
                 if frame is None:
                     frame = generate_offline_frame(self.width, self.height)
                     if self.current_source != "offline":
@@ -710,6 +766,9 @@ class VirtualCameraManager:
         self._running = False
         try:
             keyboard.remove_hotkey(self.settings.hotkey)
+            keyboard.remove_hotkey("ctrl+alt+1")
+            keyboard.remove_hotkey("ctrl+alt+2")
+            keyboard.remove_hotkey("ctrl+alt+3")
         except Exception:
             pass
         self.send_offline_frame()
@@ -832,7 +891,21 @@ def create_app_class():
 
             add_label("SOURCE")
             self.var_source = ctk.StringVar(value=self.settings.active_source.title())
-            self.dd_source = add_dropdown(self.var_source, ["Webcam", "Screen"], self._on_source_change)
+            self.dd_source = add_dropdown(self.var_source, ["Webcam", "Screen", "Image"], self._on_source_change)
+
+            add_label("IMAGE")
+            img_frame = ctk.CTkFrame(sidebar, fg_color="transparent")
+            img_frame.grid(row=r, column=0, padx=16, pady=(1, 2), sticky="ew")
+            img_frame.grid_columnconfigure(0, weight=1)
+            self.var_image = ctk.StringVar(value=self.settings.preferred_image or "No image selected")
+            img_entry = ctk.CTkEntry(img_frame, textvariable=self.var_image, placeholder_text="No image selected",
+                                     fg_color=BG_DARK, border_color=BORDER_STD, corner_radius=4,
+                                     text_color=TEXT_PRIMARY)
+            img_entry.grid(row=0, column=0, sticky="ew")
+            btn_browse = ctk.CTkButton(img_frame, text="...", width=30, command=self._on_browse_image,
+                                       fg_color=BG_DARK, hover_color=BORDER_STD, text_color=TEXT_PRIMARY, corner_radius=4)
+            btn_browse.grid(row=0, column=1, padx=(4, 0))
+            r += 1
 
             add_label("RESOLUTION")
             self.var_resolution = ctk.StringVar(value=f"{self.settings.resolution[0]}x{self.settings.resolution[1]}")
@@ -1072,6 +1145,16 @@ def create_app_class():
             self.settings.save()
             self._log(f"[CONFIG] Source: {value}")
 
+        def _on_browse_image(self):
+            from tkinter import filedialog
+            filepath = filedialog.askopenfilename(title="Select Image",
+                                                  filetypes=[("Image files", "*.png *.jpg *.jpeg *.bmp *.gif"), ("All files", "*.*")])
+            if filepath:
+                self.settings.preferred_image = filepath
+                self.var_image.set(filepath)
+                self.settings.save()
+                self._log(f"[CONFIG] Image: {filepath}")
+
         def _on_start(self):
             if self._running:
                 return
@@ -1085,6 +1168,7 @@ def create_app_class():
             self.settings.hotkey = self.var_hotkey.get() or "ctrl+alt+s"
             self.settings.virtual_backend = self._backend_map.get(self.var_backend.get(), "auto")
             self.settings.active_source = self.var_source.get().lower()
+            self.settings.preferred_image = self.var_image.get() if self.var_image.get() != "No image selected" else ""
             self.settings.start_with_windows = self.var_startup.get()
             self.settings.auto_start_on_load = self.var_autostart.get()
             set_start_with_windows(self.settings.start_with_windows)
