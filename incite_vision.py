@@ -355,16 +355,22 @@ def set_start_with_windows(enabled: bool):
 def letterbox_fit(frame, target_w: int, target_h: int):
     h, w = frame.shape[:2]
     if w == target_w and h == target_h:
-        return frame
+        return frame.copy()
     src_aspect = w / h
     dst_aspect = target_w / target_h
     if abs(src_aspect - dst_aspect) < 0.01:
-        return cv2.resize(frame, (target_w, target_h), interpolation=cv2.INTER_LINEAR)
+        try:
+            return cv2.resize(cv2.UMat(frame), (target_w, target_h)).get()
+        except:
+            return cv2.resize(frame, (target_w, target_h))
     if src_aspect > dst_aspect:
         new_w, new_h = target_w, int(target_w / src_aspect)
     else:
         new_h, new_w = target_h, int(target_h * src_aspect)
-    resized = cv2.resize(frame, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
+    try:
+        resized = cv2.resize(cv2.UMat(frame), (new_w, new_h)).get()
+    except:
+        resized = cv2.resize(frame, (new_w, new_h))
     canvas = np.zeros((target_h, target_w, 3), dtype=np.uint8)
     y_off = (target_h - new_h) // 2
     x_off = (target_w - new_w) // 2
