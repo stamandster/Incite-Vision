@@ -506,9 +506,12 @@ class VirtualCameraManager:
         if self.settings.preferred_image:
             self._image_frame = load_image_file(self.settings.preferred_image, self.width, self.height)
             if self._image_frame is not None:
-                logger.info("Loaded image from %s", self.settings.preferred_image)
+                logger.info("Loaded image %s (%dx%d)", self.settings.preferred_image, self._image_frame.shape[1], self._image_frame.shape[0])
             else:
                 logger.warning("Failed to load image from %s, will use black", self.settings.preferred_image)
+
+    def reload_image(self):
+        self._load_image_frame()
 
     def initialize(self):
         logger.info("Initializing at %dx%d", self.width, self.height)
@@ -628,6 +631,8 @@ class VirtualCameraManager:
                 self.on_status("transition", f"Switching to {source}")
 
     def _resize(self, frame):
+        if frame.shape[1] == self.width and frame.shape[0] == self.height:
+            return frame
         return letterbox_fit(frame, self.width, self.height)
 
     def _blend_frames(self, frame_a, frame_b, alpha: float):
@@ -1153,6 +1158,8 @@ def create_app_class():
                 self.settings.preferred_image = filepath
                 self.var_image.set(filepath)
                 self.settings.save()
+                if self.manager:
+                    self.manager.reload_image()
                 self._log(f"[CONFIG] Image: {filepath}")
 
         def _on_start(self):
