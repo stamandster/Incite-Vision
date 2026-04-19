@@ -792,22 +792,22 @@ def create_app_class():
             self.grid_columnconfigure(1, weight=1)
             self.grid_rowconfigure(0, weight=1)
 
-            sidebar = ctk.CTkFrame(self, width=280, fg_color=BG_DEEPER, corner_radius=0, border_color=BORDER_STD, border_width=1)
+            sidebar = ctk.CTkFrame(self, width=220, fg_color=BG_DEEPER, corner_radius=0, border_color=BORDER_STD, border_width=1)
             sidebar.grid(row=0, column=0, sticky="nsew")
             sidebar.grid_columnconfigure(0, weight=1)
 
-            logo_label = ctk.CTkLabel(sidebar, text=APP_NAME, font=ctk.CTkFont(size=20, weight="bold"), text_color=ACCENT_GREEN)
-            logo_label.grid(row=0, column=0, padx=20, pady=(24, 8), sticky="w")
-            subtitle = ctk.CTkLabel(sidebar, text="Virtual Camera Manager", font=ctk.CTkFont(size=11), text_color=TEXT_MUTED)
-            subtitle.grid(row=1, column=0, padx=20, pady=(0, 20), sticky="w")
+            logo_label = ctk.CTkLabel(sidebar, text=APP_NAME, font=ctk.CTkFont(size=16, weight="bold"), text_color=ACCENT_GREEN)
+            logo_label.grid(row=0, column=0, padx=16, pady=(16, 4), sticky="w")
+            subtitle = ctk.CTkLabel(sidebar, text="Virtual Camera", font=ctk.CTkFont(size=10), text_color=TEXT_MUTED)
+            subtitle.grid(row=1, column=0, padx=16, pady=(0, 12), sticky="w")
             sep = ctk.CTkFrame(sidebar, height=1, fg_color=BORDER_STD)
-            sep.grid(row=2, column=0, padx=20, pady=(0, 16), sticky="ew")
+            sep.grid(row=2, column=0, padx=16, pady=(0, 8), sticky="ew")
 
             r = 3
             def add_label(text):
                 nonlocal r
-                lbl = ctk.CTkLabel(sidebar, text=text, font=ctk.CTkFont(size=12), text_color=TEXT_SECONDARY, anchor="w")
-                lbl.grid(row=r, column=0, padx=20, pady=(8, 2), sticky="ew")
+                lbl = ctk.CTkLabel(sidebar, text=text, font=ctk.CTkFont(size=10), text_color=TEXT_SECONDARY, anchor="w")
+                lbl.grid(row=r, column=0, padx=16, pady=(6, 1), sticky="ew")
                 r += 1
                 return lbl
 
@@ -816,17 +816,17 @@ def create_app_class():
                 dd = ctk.CTkOptionMenu(sidebar, variable=var, values=values, command=command,
                                        fg_color=BG_DARK, button_color=BG_DARK, button_hover_color=BORDER_LIGHT,
                                        dropdown_fg_color=BG_DEEPER, dropdown_hover_color=BORDER_STD,
-                                       text_color=TEXT_PRIMARY, corner_radius=6)
-                dd.grid(row=r, column=0, padx=20, pady=(2, 4), sticky="ew")
+                                       text_color=TEXT_PRIMARY, corner_radius=4)
+                dd.grid(row=r, column=0, padx=16, pady=(1, 2), sticky="ew")
                 r += 1
                 return dd
 
             def add_entry(var, placeholder=""):
                 nonlocal r
                 ent = ctk.CTkEntry(sidebar, textvariable=var, placeholder_text=placeholder,
-                                   fg_color=BG_DARK, border_color=BORDER_STD, corner_radius=6,
+                                   fg_color=BG_DARK, border_color=BORDER_STD, corner_radius=4,
                                    text_color=TEXT_PRIMARY)
-                ent.grid(row=r, column=0, padx=20, pady=(2, 4), sticky="ew")
+                ent.grid(row=r, column=0, padx=16, pady=(1, 2), sticky="ew")
                 r += 1
                 return ent
 
@@ -846,11 +846,11 @@ def create_app_class():
             self.var_webcam = ctk.StringVar(value="Loading...")
             self.dd_webcam = add_dropdown(self.var_webcam, ["Loading..."])
 
-            add_label("VIRTUAL CAMERA BACKEND")
+            add_label("BACKEND")
             self.var_backend = ctk.StringVar(value="Detecting...")
             self.dd_backend = add_dropdown(self.var_backend, ["Detecting..."], command=self._on_backend_change)
 
-            add_label("TOGGLE HOTKEY")
+            add_label("HOTKEY")
             self.var_hotkey = ctk.StringVar(value=self.settings.hotkey)
             add_entry(self.var_hotkey, "e.g. ctrl+alt+s")
 
@@ -858,69 +858,69 @@ def create_app_class():
             self.var_startup = ctk.BooleanVar(value=self.settings.start_with_windows)
             cb_startup = ctk.CTkCheckBox(sidebar, text="Start with Windows", variable=self.var_startup,
                                          fg_color=ACCENT_GREEN, hover_color=ACCENT_GREEN_LINK,
-                                         text_color=TEXT_PRIMARY, corner_radius=6,
+                                         text_color=TEXT_PRIMARY, corner_radius=4,
                                          command=self._on_startup_changed)
-            cb_startup.grid(row=r, column=0, padx=20, pady=(12, 4), sticky="w")
+            cb_startup.grid(row=r, column=0, padx=16, pady=(8, 2), sticky="w")
 
             r += 1
             self.var_autostart = ctk.BooleanVar(value=self.settings.auto_start_on_load)
             cb_autostart = ctk.CTkCheckBox(sidebar, text="Auto-start on load", variable=self.var_autostart,
                                            fg_color=ACCENT_GREEN, hover_color=ACCENT_GREEN_LINK,
-                                           text_color=TEXT_PRIMARY, corner_radius=6,
+                                           text_color=TEXT_PRIMARY, corner_radius=4,
                                            command=self._on_autostart_changed)
-            cb_autostart.grid(row=r, column=0, padx=20, pady=(4, 4), sticky="w")
+            cb_autostart.grid(row=r, column=0, padx=16, pady=(2, 2), sticky="w")
 
             r += 1
             self.var_minimized = ctk.BooleanVar(value=self.settings.start_minimized)
-            cb_minimized = ctk.CTkCheckBox(sidebar, text="Start minimized to tray", variable=self.var_minimized,
+            cb_minimized = ctk.CTkCheckBox(sidebar, text="Start minimized", variable=self.var_minimized,
                                            fg_color=ACCENT_GREEN, hover_color=ACCENT_GREEN_LINK,
-                                           text_color=TEXT_PRIMARY, corner_radius=6,
+                                           text_color=TEXT_PRIMARY, corner_radius=4,
                                            command=self._on_minimized_changed)
-            cb_minimized.grid(row=r, column=0, padx=20, pady=(4, 4), sticky="w")
+            cb_minimized.grid(row=r, column=0, padx=16, pady=(2, 2), sticky="w")
 
             r += 1
             sep2 = ctk.CTkFrame(sidebar, height=1, fg_color=BORDER_STD)
-            sep2.grid(row=r, column=0, padx=20, pady=(12, 12), sticky="ew")
+            sep2.grid(row=r, column=0, padx=16, pady=(8, 8), sticky="ew")
             r += 1
 
-            self.btn_install = ctk.CTkButton(sidebar, text="Install UnityCapture Driver", command=self._on_install_driver,
+            self.btn_install = ctk.CTkButton(sidebar, text="Install Driver", command=self._on_install_driver,
                                             fg_color="transparent", border_color=ACCENT_GREEN, border_width=2,
                                             hover_color=BORDER_STD, text_color=ACCENT_GREEN,
-                                            font=ctk.CTkFont(size=13, weight="bold"), corner_radius=9999, height=36)
-            self.btn_install.grid(row=r, column=0, padx=20, pady=(4, 4), sticky="ew")
+                                            font=ctk.CTkFont(size=12, weight="bold"), corner_radius=9999, height=30)
+            self.btn_install.grid(row=r, column=0, padx=16, pady=(2, 2), sticky="ew")
             r += 1
 
             self.btn_toggle = ctk.CTkButton(sidebar, text="START", command=self._on_toggle,
                                             fg_color=ACCENT_GREEN, hover_color=ACCENT_GREEN_LINK,
-                                            text_color=BG_DEEPER, font=ctk.CTkFont(size=14, weight="bold"),
-                                            corner_radius=9999, height=40)
-            self.btn_toggle.grid(row=r, column=0, padx=20, pady=(4, 8), sticky="ew")
+                                            text_color=BG_DEEPER, font=ctk.CTkFont(size=13, weight="bold"),
+                                            corner_radius=9999, height=34)
+            self.btn_toggle.grid(row=r, column=0, padx=16, pady=(4, 8), sticky="ew")
 
             main = ctk.CTkFrame(self, fg_color=BG_DARK, corner_radius=0)
             main.grid(row=0, column=1, sticky="nsew")
             main.grid_columnconfigure(0, weight=1)
             main.grid_rowconfigure(0, weight=1)
 
-            self.status_title = ctk.CTkLabel(main, text="Ready", font=ctk.CTkFont(size=28, weight="bold"), text_color=TEXT_PRIMARY)
-            self.status_title.grid(row=0, column=0, pady=(60, 8))
-            self.status_detail = ctk.CTkLabel(main, text="Configure your settings and press START", font=ctk.CTkFont(size=14), text_color=TEXT_MUTED)
-            self.status_detail.grid(row=1, column=0, pady=(0, 20))
-            self.status_source = ctk.CTkLabel(main, text="Source: --", font=ctk.CTkFont(size=13, family="Consolas"), text_color=TEXT_SECONDARY)
-            self.status_source.grid(row=2, column=0, pady=(0, 8))
-            self.status_fps = ctk.CTkLabel(main, text="FPS: --", font=ctk.CTkFont(size=13, family="Consolas"), text_color=TEXT_SECONDARY)
-            self.status_fps.grid(row=3, column=0, pady=(0, 8))
-            self.status_backend = ctk.CTkLabel(main, text="Backend: --", font=ctk.CTkFont(size=13, family="Consolas"), text_color=TEXT_SECONDARY)
-            self.status_backend.grid(row=4, column=0, pady=(0, 8))
+            self.status_title = ctk.CTkLabel(main, text="Ready", font=ctk.CTkFont(size=24, weight="bold"), text_color=ACCENT_GREEN)
+            self.status_title.grid(row=0, column=0, pady=(40, 4))
+            self.status_detail = ctk.CTkLabel(main, text="Configure settings and press START", font=ctk.CTkFont(size=12), text_color=TEXT_MUTED)
+            self.status_detail.grid(row=1, column=0, pady=(0, 12))
+            self.status_source = ctk.CTkLabel(main, text="Source: --", font=ctk.CTkFont(size=11, family="Consolas"), text_color=TEXT_SECONDARY)
+            self.status_source.grid(row=2, column=0, pady=(0, 4))
+            self.status_fps = ctk.CTkLabel(main, text="FPS: --", font=ctk.CTkFont(size=11, family="Consolas"), text_color=TEXT_SECONDARY)
+            self.status_fps.grid(row=3, column=0, pady=(0, 4))
+            self.status_backend = ctk.CTkLabel(main, text="Backend: --", font=ctk.CTkFont(size=11, family="Consolas"), text_color=TEXT_SECONDARY)
+            self.status_backend.grid(row=4, column=0, pady=(0, 12))
 
-            log_frame = ctk.CTkFrame(main, fg_color=BG_DEEPER, corner_radius=8, border_color=BORDER_STD, border_width=1)
-            log_frame.grid(row=5, column=0, padx=24, pady=(20, 24), sticky="nsew")
+            log_frame = ctk.CTkFrame(main, fg_color=BG_DEEPER, corner_radius=6, border_color=BORDER_STD, border_width=1)
+            log_frame.grid(row=5, column=0, padx=20, pady=(8, 16), sticky="nsew")
             log_frame.grid_columnconfigure(0, weight=1)
             log_frame.grid_rowconfigure(0, weight=1)
 
-            log_label = ctk.CTkLabel(log_frame, text="ACTIVITY LOG", font=ctk.CTkFont(size=11, family="Consolas"), text_color=TEXT_MUTED)
-            log_label.grid(row=0, column=0, padx=12, pady=(8, 4), sticky="w")
-            self.log_text = ctk.CTkTextbox(log_frame, font=ctk.CTkFont(size=11, family="Consolas"), text_color=TEXT_SECONDARY, fg_color=BG_DEEPER)
-            self.log_text.grid(row=1, column=0, padx=12, pady=(0, 12), sticky="nsew")
+            log_label = ctk.CTkLabel(log_frame, text="ACTIVITY LOG", font=ctk.CTkFont(size=10, family="Consolas"), text_color=TEXT_MUTED)
+            log_label.grid(row=0, column=0, padx=10, pady=(6, 2), sticky="w")
+            self.log_text = ctk.CTkTextbox(log_frame, font=ctk.CTkFont(size=10, family="Consolas"), text_color=TEXT_SECONDARY, fg_color=BG_DEEPER)
+            self.log_text.grid(row=1, column=0, padx=10, pady=(0, 8), sticky="nsew")
             self.log_text.configure(state="disabled")
 
         def _log(self, msg):
@@ -1152,8 +1152,6 @@ def create_app_class():
                         self.after(0, lambda: setattr(self, "_minimized_to_tray", False)),
                     ),  # Left-click shows window
                 )
-                # Override double-click to toggle between webcam and screen
-                self.tray_icon._on_double_click = lambda icon: self.after(0, self._on_toggle_source)
                 self.tray_icon.menu = self.tray_icon._get_menu(self)
                 self.tray_thread = threading.Thread(target=self.tray_icon.run, daemon=True)
                 self.tray_thread.start()

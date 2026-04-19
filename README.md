@@ -116,8 +116,8 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## Version
 
-**Current Version**: 1.0.0  
-**Last Updated**: 2026-04-17
+**Current Version**: 1.0.1
+**Last Updated**: 2026-04-19
 
 ## Disclaimer
 
