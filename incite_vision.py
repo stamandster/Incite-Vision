@@ -158,7 +158,14 @@ def discover_webcams() -> Dict[int, str]:
             if ret and frame is not None:
                 w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
                 h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-                cameras[i] = f"Camera {i} ({w}x{h})"
+                try:
+                    name = cap.get(cv2.CAP_PROP_DEVICE_NAME)
+                    if name and str(name) != "0":
+                        cameras[i] = f"{name} ({w}x{h})"
+                    else:
+                        cameras[i] = f"Camera {i} ({w}x{h})"
+                except:
+                    cameras[i] = f"Camera {i} ({w}x{h})"
             cap.release()
     return cameras
 
@@ -631,7 +638,7 @@ class VirtualCameraManager:
                 self.on_status("transition", f"Switching to {source}")
 
     def _resize(self, frame):
-        if frame.shape[1] == self.width and frame.shape[0] == self.height:
+        if frame.shape[0] == self.height and frame.shape[1] == self.width:
             return frame
         return letterbox_fit(frame, self.width, self.height)
 
@@ -907,9 +914,12 @@ def create_app_class():
                                      fg_color=BG_DARK, border_color=BORDER_STD, corner_radius=4,
                                      text_color=TEXT_PRIMARY)
             img_entry.grid(row=0, column=0, sticky="ew")
-            btn_browse = ctk.CTkButton(img_frame, text="...", width=30, command=self._on_browse_image,
+            btn_browse = ctk.CTkButton(img_frame, text="...", width=28, command=self._on_browse_image,
                                        fg_color=BG_DARK, hover_color=BORDER_STD, text_color=TEXT_PRIMARY, corner_radius=4)
-            btn_browse.grid(row=0, column=1, padx=(4, 0))
+            btn_browse.grid(row=0, column=1, padx=(2, 0))
+            btn_clear = ctk.CTkButton(img_frame, text="X", width=28, command=self._on_clear_image,
+                                       fg_color=BG_DARK, hover_color="#8B0000", text_color=TEXT_PRIMARY, corner_radius=4)
+            btn_clear.grid(row=0, column=2, padx=(2, 0))
             r += 1
 
             add_label("RESOLUTION")
@@ -1161,6 +1171,14 @@ def create_app_class():
                 if self.manager:
                     self.manager.reload_image()
                 self._log(f"[CONFIG] Image: {filepath}")
+
+        def _on_clear_image(self):
+            self.settings.preferred_image = ""
+            self.var_image.set("No image selected")
+            self.settings.save()
+            if self.manager:
+                self.manager.reload_image()
+            self._log("[CONFIG] Image cleared")
 
         def _on_start(self):
             if self._running:
