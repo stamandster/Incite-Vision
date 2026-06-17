@@ -5,7 +5,7 @@ a = Analysis(
     ['incite_vision.py'],
     pathex=[],
     binaries=[],
-    datas=[],
+    datas=[('logo-icon.ico', '.'), ('logo-icon.png', '.')],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
