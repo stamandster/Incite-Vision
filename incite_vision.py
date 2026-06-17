@@ -33,12 +33,16 @@ ctk = None
 
 if getattr(sys, "frozen", False):
     APP_DIR = Path(sys.executable).parent.resolve()
+    RESOURCE_DIR = Path(getattr(sys, "_MEIPASS", APP_DIR)).resolve()
 else:
     APP_DIR = Path(__file__).parent.resolve()
+    RESOURCE_DIR = APP_DIR
 
 SETTINGS_FILE = APP_DIR / "settings.json"
 LOG_FILE = APP_DIR / "incite_vision.log"
 DRIVER_DIR = APP_DIR / "driver"
+ICON_ICO_FILE = RESOURCE_DIR / "logo-icon.ico"
+ICON_PNG_FILE = RESOURCE_DIR / "logo-icon.png"
 
 # Create default settings.json if not exists
 if not SETTINGS_FILE.exists():
@@ -883,6 +887,12 @@ def create_tray_icon(image_data, on_quit, on_show, on_click):
     return icon
 
 def create_tray_image(color, size=64):
+    if Image and ICON_PNG_FILE.exists():
+        try:
+            img = Image.open(ICON_PNG_FILE).convert("RGBA")
+            return img.resize((size, size), Image.Resampling.LANCZOS)
+        except Exception as e:
+            logger.warning("Failed to load tray icon from %s: %s", ICON_PNG_FILE, e)
     from PIL import ImageDraw
     img = Image.new("RGB", (size, size), color=(30, 30, 30))
     draw = ImageDraw.Draw(img)
@@ -910,10 +920,15 @@ def create_app_class():
             ctk.set_default_color_theme("dark-blue")
 
             self.title(APP_NAME)
-            self.geometry("800x750")
-            self.minsize(750, 700)
+            self.geometry("900x1080")
+            self.minsize(860, 980)
             self.configure(fg_color=BG_DARK)
             self.protocol("WM_DELETE_WINDOW", self.on_window_close)
+            try:
+                if ICON_ICO_FILE.exists():
+                    self.iconbitmap(str(ICON_ICO_FILE))
+            except Exception as e:
+                logger.warning("Failed to set window icon from %s: %s", ICON_ICO_FILE, e)
             self._build_layout()
             self._load_hardware()
             self._apply_settings()
@@ -931,7 +946,7 @@ def create_app_class():
             self.grid_columnconfigure(1, weight=1)
             self.grid_rowconfigure(0, weight=1)
 
-            sidebar = ctk.CTkFrame(self, width=220, fg_color=BG_DEEPER, corner_radius=0, border_color=BORDER_STD, border_width=1)
+            sidebar = ctk.CTkScrollableFrame(self, width=220, fg_color=BG_DEEPER, corner_radius=0, border_color=BORDER_STD, border_width=1)
             sidebar.grid(row=0, column=0, sticky="nsew")
             sidebar.grid_columnconfigure(0, weight=1)
 
@@ -1012,7 +1027,7 @@ def create_app_class():
 
             add_label("SCREEN MODE")
             self.var_screen_mode = ctk.StringVar(value=self.settings.screen_mode.title())
-            add_dropdown(self.var_screen_mode, ["Fit", "Fill", "Crop"])
+            self.dd_screen_mode = add_dropdown(self.var_screen_mode, ["Fit", "Fill", "Crop"], self._on_screen_mode_change)
 
             add_label("TRANSITION")
             self.var_transition_style = ctk.StringVar(value=self.settings.transition_style.title())
@@ -1020,7 +1035,7 @@ def create_app_class():
 
             add_label("FADE TIME")
             self.var_transition_duration = ctk.StringVar(value=str(self.settings.transition_duration))
-            self.dd_transition_duration = add_dropdown(self.var_transition_duration, ["0.15", "0.3", "0.5", "0.75", "1.0"])
+            self.dd_transition_duration = add_dropdown(self.var_transition_duration, ["0.15", "0.3", "0.5", "0.75", "1.0"], self._on_transition_duration_change)
 
             r += 1
             btn_zoom_preset = ctk.CTkButton(sidebar, text="Zoom HD Preset", command=self._apply_zoom_hd_preset,
@@ -1210,7 +1225,23 @@ def create_app_class():
                 self.btn_install.configure(state="normal", text=f"Install {value} Driver")
 
         def _on_transition_style_change(self, value):
+            self.settings.transition_style = value.lower()
+            self.settings.save()
             self._sync_transition_controls(value.lower())
+            self._log(f"[CONFIG] Transition: {value}")
+
+        def _on_transition_duration_change(self, value):
+            try:
+                self.settings.transition_duration = float(value)
+                self.settings.save()
+                self._log(f"[CONFIG] Fade time: {value}s")
+            except ValueError:
+                pass
+
+        def _on_screen_mode_change(self, value):
+            self.settings.screen_mode = value.lower()
+            self.settings.save()
+            self._log(f"[CONFIG] Screen mode: {value}")
 
         def _sync_transition_controls(self, style=None):
             style = style or self.var_transition_style.get().lower()
@@ -1276,6 +1307,8 @@ def create_app_class():
             self.settings.active_source = value.lower()
             self.settings.save()
             self._log(f"[CONFIG] Source: {value}")
+            if self.manager and self._running:
+                self.manager.switch_to_source(value.lower())
 
         def _on_browse_image(self):
             from tkinter import filedialog
