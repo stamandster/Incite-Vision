@@ -161,11 +161,11 @@ def discover_webcams() -> Dict[int, str]:
                 try:
                     name = cap.get(cv2.CAP_PROP_DEVICE_NAME)
                     if name and str(name) != "0":
-                        cameras[i] = f"{name} ({w}x{h})"
+                        cameras[i] = f"{name} [probe {w}x{h}]"
                     else:
-                        cameras[i] = f"Camera {i} ({w}x{h})"
+                        cameras[i] = f"Camera {i} [probe {w}x{h}]"
                 except:
-                    cameras[i] = f"Camera {i} ({w}x{h})"
+                    cameras[i] = f"Camera {i} [probe {w}x{h}]"
             cap.release()
     return cameras
 
@@ -173,8 +173,6 @@ def discover_monitors() -> Dict[int, dict]:
     with mss.mss() as sct:
         return {i: mon for i, mon in enumerate(sct.monitors)}
 
-def verify_virtual_camera_driver(backend: str = "auto") -> str:
-    results = {}
 def verify_virtual_camera_driver(backend: str = "auto") -> str:
     results = {}
 
@@ -352,6 +350,19 @@ def set_start_with_windows(enabled: bool):
     except Exception as e:
         logger.error("Failed to set startup entry: %s", e)
 
+def _resize_frame(frame, target_w: int, target_h: int):
+    src_h, src_w = frame.shape[:2]
+    if src_w == target_w and src_h == target_h:
+        return frame.copy()
+    # Downscale with INTER_AREA for sharper screen text; upscale with INTER_CUBIC.
+    if target_w <= src_w and target_h <= src_h:
+        interpolation = cv2.INTER_AREA
+    elif target_w >= src_w and target_h >= src_h:
+        interpolation = cv2.INTER_CUBIC
+    else:
+        interpolation = cv2.INTER_LINEAR
+    return cv2.resize(frame, (target_w, target_h), interpolation=interpolation)
+
 def letterbox_fit(frame, target_w: int, target_h: int):
     h, w = frame.shape[:2]
     if w == target_w and h == target_h:
@@ -359,18 +370,12 @@ def letterbox_fit(frame, target_w: int, target_h: int):
     src_aspect = w / h
     dst_aspect = target_w / target_h
     if abs(src_aspect - dst_aspect) < 0.01:
-        try:
-            return cv2.resize(cv2.UMat(frame), (target_w, target_h)).get()
-        except:
-            return cv2.resize(frame, (target_w, target_h))
+        return _resize_frame(frame, target_w, target_h)
     if src_aspect > dst_aspect:
         new_w, new_h = target_w, int(target_w / src_aspect)
     else:
         new_h, new_w = target_h, int(target_h * src_aspect)
-    try:
-        resized = cv2.resize(cv2.UMat(frame), (new_w, new_h)).get()
-    except:
-        resized = cv2.resize(frame, (new_w, new_h))
+    resized = _resize_frame(frame, new_w, new_h)
     canvas = np.zeros((target_h, target_w, 3), dtype=np.uint8)
     y_off = (target_h - new_h) // 2
     x_off = (target_w - new_w) // 2
@@ -420,17 +425,19 @@ class WebcamThread(threading.Thread):
         if not self.cap.isOpened():
             self.available = False
             return
+        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.width)
+        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.height)
+        self.cap.set(cv2.CAP_PROP_FPS, TARGET_FPS)
         ret, frame = self.cap.read()
         if not ret or frame is None:
             self.cap.release()
             self.cap = None
             self.available = False
             return
-        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.width)
-        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.height)
-        self.cap.set(cv2.CAP_PROP_FPS, TARGET_FPS)
         self.available = True
-        logger.info("Webcam %d opened at %dx%d", self.camera_index, self.width, self.height)
+        actual_w = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        actual_h = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        logger.info("Webcam %d opened at %dx%d (requested %dx%d)", self.camera_index, actual_w, actual_h, self.width, self.height)
         while self._running:
             ret, frame = self.cap.read()
             if ret:
@@ -507,6 +514,12 @@ class VirtualCameraManager:
         self.on_status = on_status
         self._warmup_end = 0.0
         self._image_frame = None
+        self.debug_info = {
+            "source": "--",
+            "input": "--",
+            "output": f"{self.width}x{self.height}",
+            "mode": "--",
+        }
         self._load_image_frame()
 
     def _load_image_frame(self):
@@ -639,7 +652,13 @@ class VirtualCameraManager:
 
     def _resize(self, frame):
         if frame.shape[0] == self.height and frame.shape[1] == self.width:
+            self.debug_info["input"] = f"{frame.shape[1]}x{frame.shape[0]}"
+            self.debug_info["output"] = f"{self.width}x{self.height}"
+            self.debug_info["mode"] = "native"
             return frame
+        self.debug_info["input"] = f"{frame.shape[1]}x{frame.shape[0]}"
+        self.debug_info["output"] = f"{self.width}x{self.height}"
+        self.debug_info["mode"] = "scaled"
         return letterbox_fit(frame, self.width, self.height)
 
     def _blend_frames(self, frame_a, frame_b, alpha: float):
@@ -758,6 +777,7 @@ class VirtualCameraManager:
                         if self.on_status:
                             self.on_status("offline", "No source available")
                 else:
+                    self.debug_info["source"] = self.current_source
                     frame = self._resize(frame)
                 if self.vcam:
                     try:
@@ -852,6 +872,7 @@ def create_app_class():
             self._load_hardware()
             self._apply_settings()
             self._update_status("stopped", "Ready")
+            self.after(500, self._refresh_debug_status)
             if self.settings.start_minimized:
                 self._minimized_to_tray = True
                 self.withdraw()
@@ -1009,6 +1030,8 @@ def create_app_class():
             self.status_fps.grid(row=0, column=1, padx=(0, 16))
             self.status_backend = ctk.CTkLabel(info_grid, text="Backend: --", font=ctk.CTkFont(size=10, family="Consolas"), text_color=TEXT_SECONDARY)
             self.status_backend.grid(row=0, column=2)
+            self.status_dims = ctk.CTkLabel(status_box, text="Frames: in -- -> out --", font=ctk.CTkFont(size=10, family="Consolas"), text_color=TEXT_MUTED)
+            self.status_dims.grid(row=3, column=0, pady=(6, 0))
 
             log_frame = ctk.CTkFrame(main, fg_color=BG_DEEPER, corner_radius=4, border_color=BORDER_STD, border_width=1)
             log_frame.grid(row=5, column=0, padx=12, pady=(8, 12), sticky="nsew")
@@ -1026,6 +1049,14 @@ def create_app_class():
             self.log_text.insert("end", msg + "\n")
             self.log_text.see("end")
             self.log_text.configure(state="disabled")
+
+        def _refresh_debug_status(self):
+            if self.manager:
+                info = self.manager.debug_info
+                self.status_dims.configure(text=f"Frames: in {info['input']} -> out {info['output']} ({info['mode']})")
+            else:
+                self.status_dims.configure(text=f"Frames: in -- -> out {self.settings.resolution[0]}x{self.settings.resolution[1]}")
+            self.after(500, self._refresh_debug_status)
 
         def _load_hardware(self):
             self._log("[CONFIG] Loading settings...")
