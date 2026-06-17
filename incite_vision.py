@@ -50,6 +50,10 @@ if not SETTINGS_FILE.exists():
         "virtual_backend": "auto",
         "active_source": "webcam",
         "preferred_image": "",
+        "mirror_webcam": False,
+        "screen_mode": "fit",
+        "transition_style": "fade",
+        "transition_duration": 0.5,
         "start_with_windows": False,
         "auto_start_on_load": False,
         "start_minimized": False,
@@ -96,6 +100,10 @@ class Settings:
     virtual_backend: str = "auto"
     active_source: str = "webcam"
     preferred_image: str = ""
+    mirror_webcam: bool = False
+    screen_mode: str = "fit"
+    transition_style: str = "fade"
+    transition_duration: float = 0.5
     start_with_windows: bool = False
     auto_start_on_load: bool = False
     start_minimized: bool = False
@@ -382,6 +390,26 @@ def letterbox_fit(frame, target_w: int, target_h: int):
     canvas[y_off:y_off+new_h, x_off:x_off+new_w] = resized
     return canvas
 
+def fill_crop(frame, target_w: int, target_h: int):
+    h, w = frame.shape[:2]
+    if w == target_w and h == target_h:
+        return frame.copy()
+    scale = max(target_w / w, target_h / h)
+    new_w = max(1, int(round(w * scale)))
+    new_h = max(1, int(round(h * scale)))
+    resized = _resize_frame(frame, new_w, new_h)
+    x_off = max(0, (new_w - target_w) // 2)
+    y_off = max(0, (new_h - target_h) // 2)
+    return resized[y_off:y_off+target_h, x_off:x_off+target_w].copy()
+
+def center_crop_or_fit(frame, target_w: int, target_h: int):
+    h, w = frame.shape[:2]
+    if w >= target_w and h >= target_h:
+        x_off = (w - target_w) // 2
+        y_off = (h - target_h) // 2
+        return frame[y_off:y_off+target_h, x_off:x_off+target_w].copy()
+    return letterbox_fit(frame, target_w, target_h)
+
 def generate_offline_frame(width: int, height: int):
     frame = np.zeros((height, width, 3), dtype=np.uint8)
     frame[:] = (30, 30, 30)
@@ -622,7 +650,10 @@ class VirtualCameraManager:
 
     def _get_frame_for_source(self, source: str):
         if source == "webcam" and self.webcam_thread and self.webcam_thread.available:
-            return self.webcam_thread.get_frame()
+            frame = self.webcam_thread.get_frame()
+            if frame is not None and self.settings.mirror_webcam:
+                return cv2.flip(frame, 1)
+            return frame
         elif source == "screen" and self.screen_thread:
             screen_frame = self.screen_thread.get_frame()
             if screen_frame is not None:
@@ -632,6 +663,23 @@ class VirtualCameraManager:
                 return self._image_frame
             return generate_black_frame(self.width, self.height)
         return None
+
+    def _begin_switch(self, source: str):
+        if self.settings.transition_style == "cut":
+            self.current_source = source
+            self.target_source = source
+            self.settings.active_source = source
+            self.settings.save()
+            logger.info("Cut to '%s'", source)
+            if self.on_status:
+                self.on_status("running", f"Source: {source}")
+            return
+        self.target_source = source
+        self.transitioning = True
+        self.transition_start = time.time()
+        logger.info("Switching to '%s'", source)
+        if self.on_status:
+            self.on_status("transition", f"Switching to {source}")
 
     def switch_to_source(self, source: str):
         with self._lock:
@@ -643,14 +691,9 @@ class VirtualCameraManager:
                 if self.on_status:
                     self.on_status("warning", "Webcam not available")
                 return
-            self.target_source = source
-            self.transitioning = True
-            self.transition_start = time.time()
-            logger.info("Switching to '%s'", source)
-            if self.on_status:
-                self.on_status("transition", f"Switching to {source}")
+            self._begin_switch(source)
 
-    def _resize(self, frame):
+    def _resize(self, frame, source=None):
         if frame.shape[0] == self.height and frame.shape[1] == self.width:
             self.debug_info["input"] = f"{frame.shape[1]}x{frame.shape[0]}"
             self.debug_info["output"] = f"{self.width}x{self.height}"
@@ -658,7 +701,14 @@ class VirtualCameraManager:
             return frame
         self.debug_info["input"] = f"{frame.shape[1]}x{frame.shape[0]}"
         self.debug_info["output"] = f"{self.width}x{self.height}"
-        self.debug_info["mode"] = "scaled"
+        if source == "screen":
+            mode = self.settings.screen_mode
+            self.debug_info["mode"] = mode
+            if mode == "fill":
+                return fill_crop(frame, self.width, self.height)
+            if mode == "crop":
+                return center_crop_or_fit(frame, self.width, self.height)
+        self.debug_info["mode"] = "fit"
         return letterbox_fit(frame, self.width, self.height)
 
     def _blend_frames(self, frame_a, frame_b, alpha: float):
@@ -688,25 +738,21 @@ class VirtualCameraManager:
                     self.target_source = "screen"
                 else:
                     return
-            self.transitioning = True
-            self.transition_start = time.time()
-            logger.info("Transitioning '%s' -> '%s'", self.current_source, self.target_source)
-            if self.on_status:
-                self.on_status("transition", f"Switching {self.current_source} -> {self.target_source}")
+            self._begin_switch(self.target_source)
 
     def _process_transition(self):
         if not self.transitioning:
             return None
         elapsed = time.time() - self.transition_start
-        progress = min(elapsed / TRANSITION_DURATION, 1.0)
+        progress = min(elapsed / max(self.settings.transition_duration, 0.01), 1.0)
         frame_from = self._get_frame_for_source(self.current_source)
         frame_to = self._get_frame_for_source(self.target_source)
         if frame_from is None or frame_to is None:
             self.transitioning = False
             self.current_source = self.target_source
             return None
-        frame_from = self._resize(frame_from)
-        frame_to = self._resize(frame_to)
+        frame_from = self._resize(frame_from, self.current_source)
+        frame_to = self._resize(frame_to, self.target_source)
         blended = self._blend_frames(frame_from, frame_to, progress)
         if progress >= 1.0:
             self.current_source = self.target_source
@@ -778,7 +824,7 @@ class VirtualCameraManager:
                             self.on_status("offline", "No source available")
                 else:
                     self.debug_info["source"] = self.current_source
-                    frame = self._resize(frame)
+                    frame = self._resize(frame, self.current_source)
                 if self.vcam:
                     try:
                         self.vcam.send(frame)
@@ -962,6 +1008,32 @@ def create_app_class():
             add_label("HOTKEY")
             self.var_hotkey = ctk.StringVar(value=self.settings.hotkey)
             add_entry(self.var_hotkey, "e.g. ctrl+alt+s")
+
+            add_label("SCREEN MODE")
+            self.var_screen_mode = ctk.StringVar(value=self.settings.screen_mode.title())
+            add_dropdown(self.var_screen_mode, ["Fit", "Fill", "Crop"])
+
+            add_label("TRANSITION")
+            self.var_transition_style = ctk.StringVar(value=self.settings.transition_style.title())
+            add_dropdown(self.var_transition_style, ["Fade", "Cut"])
+
+            add_label("FADE TIME")
+            self.var_transition_duration = ctk.StringVar(value=str(self.settings.transition_duration))
+            add_dropdown(self.var_transition_duration, ["0.15", "0.3", "0.5", "0.75", "1.0"])
+
+            r += 1
+            btn_zoom_preset = ctk.CTkButton(sidebar, text="Zoom HD Preset", command=self._apply_zoom_hd_preset,
+                                            fg_color=BG_DARK, hover_color=BORDER_STD, text_color=TEXT_PRIMARY,
+                                            corner_radius=4, height=28)
+            btn_zoom_preset.grid(row=r, column=0, padx=16, pady=(4, 2), sticky="ew")
+
+            r += 1
+            self.var_mirror_webcam = ctk.BooleanVar(value=self.settings.mirror_webcam)
+            cb_mirror_webcam = ctk.CTkCheckBox(sidebar, text="Mirror webcam", variable=self.var_mirror_webcam,
+                                               fg_color=ACCENT_GREEN, hover_color=ACCENT_GREEN_LINK,
+                                               text_color=TEXT_PRIMARY, corner_radius=4,
+                                               command=self._on_mirror_webcam_changed)
+            cb_mirror_webcam.grid(row=r, column=0, padx=16, pady=(8, 2), sticky="w")
 
             r += 1
             self.var_startup = ctk.BooleanVar(value=self.settings.start_with_windows)
@@ -1176,6 +1248,11 @@ def create_app_class():
             set_start_with_windows(self.settings.start_with_windows)
             self._log(f"[CONFIG] Start with Windows: {'enabled' if self.settings.start_with_windows else 'disabled'}")
 
+        def _on_mirror_webcam_changed(self):
+            self.settings.mirror_webcam = self.var_mirror_webcam.get()
+            self.settings.save()
+            self._log(f"[CONFIG] Mirror webcam: {'enabled' if self.settings.mirror_webcam else 'disabled'}")
+
         def _on_autostart_changed(self):
             self.settings.auto_start_on_load = self.var_autostart.get()
             self.settings.save()
@@ -1211,6 +1288,10 @@ def create_app_class():
                 self.manager.reload_image()
             self._log("[CONFIG] Image cleared")
 
+        def _apply_zoom_hd_preset(self):
+            self.var_resolution.set("1280x720")
+            self._log("[CONFIG] Applied Zoom HD preset: 1280x720")
+
         def _on_start(self):
             if self._running:
                 return
@@ -1225,6 +1306,10 @@ def create_app_class():
             self.settings.virtual_backend = self._backend_map.get(self.var_backend.get(), "auto")
             self.settings.active_source = self.var_source.get().lower()
             self.settings.preferred_image = self.var_image.get() if self.var_image.get() != "No image selected" else ""
+            self.settings.screen_mode = self.var_screen_mode.get().lower()
+            self.settings.transition_style = self.var_transition_style.get().lower()
+            self.settings.transition_duration = float(self.var_transition_duration.get())
+            self.settings.mirror_webcam = self.var_mirror_webcam.get()
             self.settings.start_with_windows = self.var_startup.get()
             self.settings.auto_start_on_load = self.var_autostart.get()
             set_start_with_windows(self.settings.start_with_windows)
