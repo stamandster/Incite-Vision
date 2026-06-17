@@ -917,6 +917,7 @@ def create_app_class():
             self._build_layout()
             self._load_hardware()
             self._apply_settings()
+            self._sync_transition_controls(self.settings.transition_style)
             self._update_status("stopped", "Ready")
             self.after(500, self._refresh_debug_status)
             if self.settings.start_minimized:
@@ -1015,11 +1016,11 @@ def create_app_class():
 
             add_label("TRANSITION")
             self.var_transition_style = ctk.StringVar(value=self.settings.transition_style.title())
-            add_dropdown(self.var_transition_style, ["Fade", "Cut"])
+            self.dd_transition_style = add_dropdown(self.var_transition_style, ["Fade", "Cut"], self._on_transition_style_change)
 
             add_label("FADE TIME")
             self.var_transition_duration = ctk.StringVar(value=str(self.settings.transition_duration))
-            add_dropdown(self.var_transition_duration, ["0.15", "0.3", "0.5", "0.75", "1.0"])
+            self.dd_transition_duration = add_dropdown(self.var_transition_duration, ["0.15", "0.3", "0.5", "0.75", "1.0"])
 
             r += 1
             btn_zoom_preset = ctk.CTkButton(sidebar, text="Zoom HD Preset", command=self._apply_zoom_hd_preset,
@@ -1207,6 +1208,14 @@ def create_app_class():
                 self.btn_install.configure(state="disabled", text=f"{value} (installed)")
             else:
                 self.btn_install.configure(state="normal", text=f"Install {value} Driver")
+
+        def _on_transition_style_change(self, value):
+            self._sync_transition_controls(value.lower())
+
+        def _sync_transition_controls(self, style=None):
+            style = style or self.var_transition_style.get().lower()
+            state = "disabled" if style == "cut" else "normal"
+            self.dd_transition_duration.configure(state=state)
 
         def _on_install_driver(self):
             display = self.var_backend.get()
