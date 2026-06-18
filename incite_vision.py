@@ -51,6 +51,9 @@ if not SETTINGS_FILE.exists():
         "preferred_monitor_id": 1,
         "preferred_webcam_index": 0,
         "hotkey": "ctrl+alt+s",
+        "webcam_hotkey": "ctrl+alt+1",
+        "screen_hotkey": "ctrl+alt+2",
+        "image_hotkey": "ctrl+alt+3",
         "virtual_backend": "auto",
         "active_source": "webcam",
         "preferred_image": "",
@@ -101,6 +104,9 @@ class Settings:
     preferred_monitor_id: int = 1
     preferred_webcam_index: int = 0
     hotkey: str = "ctrl+alt+s"
+    webcam_hotkey: str = "ctrl+alt+1"
+    screen_hotkey: str = "ctrl+alt+2"
+    image_hotkey: str = "ctrl+alt+3"
     virtual_backend: str = "auto"
     active_source: str = "webcam"
     preferred_image: str = ""
@@ -160,6 +166,9 @@ def ensure_dependencies():
     import pystray as _tray; pystray = _tray
     from PIL import Image as _Image; Image = _Image
     import customtkinter as _ctk; ctk = _ctk
+
+def normalize_hotkey(value: str) -> str:
+    return (value or "").strip().lower()
 
 def discover_webcams() -> Dict[int, str]:
     cameras = {}
@@ -545,6 +554,7 @@ class VirtualCameraManager:
         self._lock = threading.Lock()
         self.on_status = on_status
         self._warmup_end = 0.0
+        self._hotkey_handles = {}
         self._image_frame = None
         self.debug_info = {
             "source": "--",
@@ -685,6 +695,36 @@ class VirtualCameraManager:
         if self.on_status:
             self.on_status("transition", f"Switching to {source}")
 
+    def _hotkey_map(self):
+        return {
+            "toggle": (normalize_hotkey(self.settings.hotkey), self.handle_hotkey),
+            "webcam": (normalize_hotkey(self.settings.webcam_hotkey), lambda: self.switch_to_source("webcam")),
+            "screen": (normalize_hotkey(self.settings.screen_hotkey), lambda: self.switch_to_source("screen")),
+            "image": (normalize_hotkey(self.settings.image_hotkey), lambda: self.switch_to_source("image")),
+        }
+
+    def unregister_hotkeys(self):
+        for handle in self._hotkey_handles.values():
+            try:
+                keyboard.remove_hotkey(handle)
+            except Exception:
+                pass
+        self._hotkey_handles.clear()
+
+    def register_hotkeys(self):
+        self.unregister_hotkeys()
+        registered = []
+        for name, (hotkey, callback) in self._hotkey_map().items():
+            if not hotkey:
+                continue
+            handle = keyboard.add_hotkey(hotkey, callback, suppress=True)
+            self._hotkey_handles[name] = handle
+            registered.append(f"{name}={hotkey}")
+        logger.info("Hotkeys registered: %s", ", ".join(registered) if registered else "none")
+
+    def rebind_hotkeys(self):
+        self.register_hotkeys()
+
     def switch_to_source(self, source: str):
         with self._lock:
             if self.transitioning:
@@ -796,11 +836,7 @@ class VirtualCameraManager:
     def run(self):
         self._running = True
         self._warmup_end = time.time() + 3.0
-        keyboard.add_hotkey(self.settings.hotkey, self.handle_hotkey, suppress=True)
-        keyboard.add_hotkey("ctrl+alt+1", lambda: self.switch_to_source("webcam"), suppress=True)
-        keyboard.add_hotkey("ctrl+alt+2", lambda: self.switch_to_source("screen"), suppress=True)
-        keyboard.add_hotkey("ctrl+alt+3", lambda: self.switch_to_source("image"), suppress=True)
-        logger.info("Hotkeys registered: %s, Ctrl+Alt+1/2/3", self.settings.hotkey)
+        self.register_hotkeys()
         frame_interval = 1.0 / TARGET_FPS
         try:
             while self._running:
@@ -846,13 +882,7 @@ class VirtualCameraManager:
     def shutdown(self):
         logger.info("Shutting down...")
         self._running = False
-        try:
-            keyboard.remove_hotkey(self.settings.hotkey)
-            keyboard.remove_hotkey("ctrl+alt+1")
-            keyboard.remove_hotkey("ctrl+alt+2")
-            keyboard.remove_hotkey("ctrl+alt+3")
-        except Exception:
-            pass
+        self.unregister_hotkeys()
         self.send_offline_frame()
         if self.webcam_thread:
             self.webcam_thread.stop()
@@ -1021,9 +1051,21 @@ def create_app_class():
             self.var_backend = ctk.StringVar(value="Detecting...")
             self.dd_backend = add_dropdown(self.var_backend, ["Detecting..."], command=self._on_backend_change)
 
-            add_label("HOTKEY")
+            add_label("TOGGLE HOTKEY")
             self.var_hotkey = ctk.StringVar(value=self.settings.hotkey)
-            add_entry(self.var_hotkey, "e.g. ctrl+alt+s")
+            self.entry_hotkey = add_entry(self.var_hotkey, "e.g. ctrl+alt+s")
+
+            add_label("WEBCAM HOTKEY")
+            self.var_webcam_hotkey = ctk.StringVar(value=self.settings.webcam_hotkey)
+            self.entry_webcam_hotkey = add_entry(self.var_webcam_hotkey, "blank disables")
+
+            add_label("SCREEN HOTKEY")
+            self.var_screen_hotkey = ctk.StringVar(value=self.settings.screen_hotkey)
+            self.entry_screen_hotkey = add_entry(self.var_screen_hotkey, "blank disables")
+
+            add_label("IMAGE HOTKEY")
+            self.var_image_hotkey = ctk.StringVar(value=self.settings.image_hotkey)
+            self.entry_image_hotkey = add_entry(self.var_image_hotkey, "blank disables")
 
             add_label("SCREEN MODE")
             self.var_screen_mode = ctk.StringVar(value=self.settings.screen_mode.title())
@@ -1132,6 +1174,10 @@ def create_app_class():
             self.log_text.grid(row=1, column=0, padx=8, pady=(2, 4), sticky="nsew")
             self.log_text.configure(state="disabled")
 
+            for entry in [self.entry_hotkey, self.entry_webcam_hotkey, self.entry_screen_hotkey, self.entry_image_hotkey]:
+                entry.bind("<FocusOut>", self._on_hotkey_fields_changed)
+                entry.bind("<Return>", self._on_hotkey_fields_changed)
+
         def _log(self, msg):
             self.log_text.configure(state="normal")
             self.log_text.insert("end", msg + "\n")
@@ -1223,6 +1269,43 @@ def create_app_class():
                 self.btn_install.configure(state="disabled", text=f"{value} (installed)")
             else:
                 self.btn_install.configure(state="normal", text=f"Install {value} Driver")
+
+        def _collect_hotkey_values(self):
+            return {
+                "toggle": normalize_hotkey(self.var_hotkey.get()),
+                "webcam": normalize_hotkey(self.var_webcam_hotkey.get()),
+                "screen": normalize_hotkey(self.var_screen_hotkey.get()),
+                "image": normalize_hotkey(self.var_image_hotkey.get()),
+            }
+
+        def _apply_hotkey_settings(self, live=False):
+            hotkeys = self._collect_hotkey_values()
+            used = {}
+            for name, hotkey in hotkeys.items():
+                if not hotkey:
+                    continue
+                if hotkey in used:
+                    msg = f"Duplicate hotkey: {hotkey} used for {used[hotkey]} and {name}"
+                    self._update_status("warning", msg)
+                    return False
+                used[hotkey] = name
+            self.settings.hotkey = hotkeys["toggle"]
+            self.settings.webcam_hotkey = hotkeys["webcam"]
+            self.settings.screen_hotkey = hotkeys["screen"]
+            self.settings.image_hotkey = hotkeys["image"]
+            self.settings.save()
+            if live and self.manager:
+                try:
+                    self.manager.rebind_hotkeys()
+                    self._log("[CONFIG] Hotkeys updated live")
+                except Exception as e:
+                    self._update_status("warning", f"Hotkey update failed: {e}")
+                    return False
+            return True
+
+        def _on_hotkey_fields_changed(self, _event=None):
+            if self._running:
+                self._apply_hotkey_settings(live=True)
 
         def _on_transition_style_change(self, value):
             self.settings.transition_style = value.lower()
@@ -1344,7 +1427,8 @@ def create_app_class():
             self.settings.preferred_monitor_id = self._monitor_map_reverse.get(mon_label, 1)
             cam_label = self.var_webcam.get()
             self.settings.preferred_webcam_index = self._webcam_map_reverse.get(cam_label, 0)
-            self.settings.hotkey = self.var_hotkey.get() or "ctrl+alt+s"
+            if not self._apply_hotkey_settings(live=False):
+                return
             self.settings.virtual_backend = self._backend_map.get(self.var_backend.get(), "auto")
             self.settings.active_source = self.var_source.get().lower()
             self.settings.preferred_image = self.var_image.get() if self.var_image.get() != "No image selected" else ""
