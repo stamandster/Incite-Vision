@@ -945,6 +945,7 @@ def create_app_class():
             self._webcam_map = {}
             self._monitor_map = {}
             self._minimized_to_tray = False
+            self._advanced_visible = False
 
             ctk.set_appearance_mode("dark")
             ctk.set_default_color_theme("dark-blue")
@@ -976,7 +977,7 @@ def create_app_class():
             self.grid_columnconfigure(1, weight=1)
             self.grid_rowconfigure(0, weight=1)
 
-            sidebar = ctk.CTkScrollableFrame(self, width=220, fg_color=BG_DEEPER, corner_radius=0, border_color=BORDER_STD, border_width=1)
+            sidebar = ctk.CTkScrollableFrame(self, width=280, fg_color=BG_DEEPER, corner_radius=0, border_color=BORDER_STD, border_width=1)
             sidebar.grid(row=0, column=0, sticky="nsew")
             sidebar.grid_columnconfigure(0, weight=1)
 
@@ -987,40 +988,74 @@ def create_app_class():
             sep = ctk.CTkFrame(sidebar, height=1, fg_color=BORDER_STD)
             sep.grid(row=2, column=0, padx=16, pady=(0, 8), sticky="ew")
 
-            r = 3
-            def add_label(text):
-                nonlocal r
-                lbl = ctk.CTkLabel(sidebar, text=text, font=ctk.CTkFont(size=10), text_color=TEXT_SECONDARY, anchor="w")
-                lbl.grid(row=r, column=0, padx=16, pady=(6, 1), sticky="ew")
-                r += 1
+            def add_card(parent):
+                card = ctk.CTkFrame(parent, fg_color=BG_DARK, corner_radius=8, border_color=BORDER_STD, border_width=1)
+                card.grid_columnconfigure(0, weight=1)
+                return card
+
+            def add_label(parent, row, text, *, mono=False):
+                font = ctk.CTkFont(size=9, family="Consolas") if mono else ctk.CTkFont(size=10)
+                lbl = ctk.CTkLabel(parent, text=text, font=font, text_color=TEXT_SECONDARY, anchor="w")
+                lbl.grid(row=row, column=0, padx=12, pady=(6, 1), sticky="ew")
                 return lbl
 
-            def add_dropdown(var, values, command=None):
-                nonlocal r
-                dd = ctk.CTkOptionMenu(sidebar, variable=var, values=values, command=command,
+            def add_dropdown(parent, row, var, values, command=None):
+                dd = ctk.CTkOptionMenu(parent, variable=var, values=values, command=command,
                                        fg_color=BG_DARK, button_color=BG_DARK, button_hover_color=BORDER_LIGHT,
                                        dropdown_fg_color=BG_DEEPER, dropdown_hover_color=BORDER_STD,
                                        text_color=TEXT_PRIMARY, corner_radius=4)
-                dd.grid(row=r, column=0, padx=16, pady=(1, 2), sticky="ew")
-                r += 1
+                dd.grid(row=row, column=0, padx=12, pady=(1, 2), sticky="ew")
                 return dd
 
-            def add_entry(var, placeholder=""):
-                nonlocal r
-                ent = ctk.CTkEntry(sidebar, textvariable=var, placeholder_text=placeholder,
+            def add_entry(parent, row, var, placeholder=""):
+                ent = ctk.CTkEntry(parent, textvariable=var, placeholder_text=placeholder,
                                    fg_color=BG_DARK, border_color=BORDER_STD, corner_radius=4,
                                    text_color=TEXT_PRIMARY)
-                ent.grid(row=r, column=0, padx=16, pady=(1, 2), sticky="ew")
-                r += 1
+                ent.grid(row=row, column=0, padx=12, pady=(1, 2), sticky="ew")
                 return ent
 
-            add_label("SOURCE")
-            self.var_source = ctk.StringVar(value=self.settings.active_source.title())
-            self.dd_source = add_dropdown(self.var_source, ["Webcam", "Screen", "Image"], self._on_source_change)
+            def add_checkbox(parent, row, text, var, command):
+                cb = ctk.CTkCheckBox(parent, text=text, variable=var,
+                                     fg_color=ACCENT_GREEN, hover_color=ACCENT_GREEN_LINK,
+                                     text_color=TEXT_PRIMARY, corner_radius=4,
+                                     command=command)
+                cb.grid(row=row, column=0, padx=12, pady=(4, 2), sticky="w")
+                return cb
 
-            add_label("IMAGE")
-            img_frame = ctk.CTkFrame(sidebar, fg_color="transparent")
-            img_frame.grid(row=r, column=0, padx=16, pady=(1, 2), sticky="ew")
+            r = 3
+            header_card = add_card(sidebar)
+            header_card.grid(row=r, column=0, padx=16, pady=(4, 8), sticky="ew")
+            header_card.grid_columnconfigure(0, weight=1)
+            row = 0
+            self.status_title = ctk.CTkLabel(header_card, text="Ready", font=ctk.CTkFont(size=18, weight="bold"), text_color=ACCENT_GREEN)
+            self.status_title.grid(row=row, column=0, padx=12, pady=(10, 2))
+            row += 1
+            self.status_detail = ctk.CTkLabel(header_card, text="Configure settings and press START", font=ctk.CTkFont(size=11), text_color=TEXT_MUTED)
+            self.status_detail.grid(row=row, column=0, padx=12, pady=(0, 10))
+            row += 1
+            self.btn_toggle = ctk.CTkButton(header_card, text="START", command=self._on_toggle,
+                                            fg_color=ACCENT_GREEN, hover_color=ACCENT_GREEN_LINK,
+                                            text_color=BG_DEEPER, font=ctk.CTkFont(size=13, weight="bold"),
+                                            corner_radius=9999, height=34)
+            self.btn_toggle.grid(row=row, column=0, padx=12, pady=(0, 12), sticky="ew")
+            r += 1
+
+            core_card = add_card(sidebar)
+            core_card.grid(row=r, column=0, padx=16, pady=(0, 8), sticky="ew")
+            core_card.grid_columnconfigure(0, weight=1)
+            row = 0
+            ctk.CTkLabel(core_card, text="CORE CAPTURE", font=ctk.CTkFont(size=9, family="Consolas"), text_color=TEXT_MUTED, anchor="w").grid(row=row, column=0, padx=12, pady=(10, 0), sticky="ew")
+            row += 1
+            add_label(core_card, row, "SOURCE", mono=False)
+            row += 1
+            self.var_source = ctk.StringVar(value=self.settings.active_source.title())
+            self.dd_source = add_dropdown(core_card, row, self.var_source, ["Webcam", "Screen", "Image"], self._on_source_change)
+            row += 1
+
+            add_label(core_card, row, "IMAGE")
+            row += 1
+            img_frame = ctk.CTkFrame(core_card, fg_color="transparent")
+            img_frame.grid(row=row, column=0, padx=12, pady=(1, 2), sticky="ew")
             img_frame.grid_columnconfigure(0, weight=1)
             self.var_image = ctk.StringVar(value=self.settings.preferred_image or "No image selected")
             img_entry = ctk.CTkEntry(img_frame, textvariable=self.var_image, placeholder_text="No image selected",
@@ -1033,107 +1068,136 @@ def create_app_class():
             btn_clear = ctk.CTkButton(img_frame, text="X", width=28, command=self._on_clear_image,
                                        fg_color=BG_DARK, hover_color="#8B0000", text_color=TEXT_PRIMARY, corner_radius=4)
             btn_clear.grid(row=0, column=2, padx=(2, 0))
-            r += 1
+            row += 1
 
-            add_label("RESOLUTION")
+            add_label(core_card, row, "RESOLUTION")
+            row += 1
             self.var_resolution = ctk.StringVar(value=f"{self.settings.resolution[0]}x{self.settings.resolution[1]}")
-            add_dropdown(self.var_resolution, ["1920x1080", "1280x720", "2560x1440", "3840x2160", "640x480"])
+            add_dropdown(core_card, row, self.var_resolution, ["1920x1080", "1280x720", "2560x1440", "3840x2160", "640x480"])
+            row += 1
 
-            add_label("MONITOR")
+            add_label(core_card, row, "MONITOR")
+            row += 1
             self.var_monitor = ctk.StringVar(value="Loading...")
-            self.dd_monitor = add_dropdown(self.var_monitor, ["Loading..."])
+            self.dd_monitor = add_dropdown(core_card, row, self.var_monitor, ["Loading..."])
+            row += 1
 
-            add_label("WEBCAM")
+            add_label(core_card, row, "WEBCAM")
+            row += 1
             self.var_webcam = ctk.StringVar(value="Loading...")
-            self.dd_webcam = add_dropdown(self.var_webcam, ["Loading..."])
+            self.dd_webcam = add_dropdown(core_card, row, self.var_webcam, ["Loading..."])
+            row += 1
 
-            add_label("BACKEND")
+            add_label(core_card, row, "BACKEND")
+            row += 1
             self.var_backend = ctk.StringVar(value="Detecting...")
-            self.dd_backend = add_dropdown(self.var_backend, ["Detecting..."], command=self._on_backend_change)
+            self.dd_backend = add_dropdown(core_card, row, self.var_backend, ["Detecting..."], command=self._on_backend_change)
+            row += 1
 
-            add_label("TOGGLE HOTKEY")
-            self.var_hotkey = ctk.StringVar(value=self.settings.hotkey)
-            self.entry_hotkey = add_entry(self.var_hotkey, "e.g. ctrl+alt+s")
-
-            add_label("WEBCAM HOTKEY")
-            self.var_webcam_hotkey = ctk.StringVar(value=self.settings.webcam_hotkey)
-            self.entry_webcam_hotkey = add_entry(self.var_webcam_hotkey, "blank disables")
-
-            add_label("SCREEN HOTKEY")
-            self.var_screen_hotkey = ctk.StringVar(value=self.settings.screen_hotkey)
-            self.entry_screen_hotkey = add_entry(self.var_screen_hotkey, "blank disables")
-
-            add_label("IMAGE HOTKEY")
-            self.var_image_hotkey = ctk.StringVar(value=self.settings.image_hotkey)
-            self.entry_image_hotkey = add_entry(self.var_image_hotkey, "blank disables")
-
-            add_label("SCREEN MODE")
-            self.var_screen_mode = ctk.StringVar(value=self.settings.screen_mode.title())
-            self.dd_screen_mode = add_dropdown(self.var_screen_mode, ["Fit", "Fill", "Crop"], self._on_screen_mode_change)
-
-            add_label("TRANSITION")
-            self.var_transition_style = ctk.StringVar(value=self.settings.transition_style.title())
-            self.dd_transition_style = add_dropdown(self.var_transition_style, ["Fade", "Cut"], self._on_transition_style_change)
-
-            add_label("FADE TIME")
-            self.var_transition_duration = ctk.StringVar(value=str(self.settings.transition_duration))
-            self.dd_transition_duration = add_dropdown(self.var_transition_duration, ["0.15", "0.3", "0.5", "0.75", "1.0"], self._on_transition_duration_change)
-
-            r += 1
-            btn_zoom_preset = ctk.CTkButton(sidebar, text="Zoom HD Preset", command=self._apply_zoom_hd_preset,
+            btn_zoom_preset = ctk.CTkButton(core_card, text="Zoom HD Preset", command=self._apply_zoom_hd_preset,
                                             fg_color=BG_DARK, hover_color=BORDER_STD, text_color=TEXT_PRIMARY,
                                             corner_radius=4, height=28)
-            btn_zoom_preset.grid(row=r, column=0, padx=16, pady=(4, 2), sticky="ew")
-
+            btn_zoom_preset.grid(row=row, column=0, padx=12, pady=(8, 12), sticky="ew")
             r += 1
+
+            live_card = add_card(sidebar)
+            live_card.grid(row=r, column=0, padx=16, pady=(0, 8), sticky="ew")
+            live_card.grid_columnconfigure(0, weight=1)
+            row = 0
+            ctk.CTkLabel(live_card, text="LIVE TUNING", font=ctk.CTkFont(size=9, family="Consolas"), text_color=TEXT_MUTED, anchor="w").grid(row=row, column=0, padx=12, pady=(10, 0), sticky="ew")
+            row += 1
             self.var_mirror_webcam = ctk.BooleanVar(value=self.settings.mirror_webcam)
-            cb_mirror_webcam = ctk.CTkCheckBox(sidebar, text="Mirror webcam", variable=self.var_mirror_webcam,
-                                               fg_color=ACCENT_GREEN, hover_color=ACCENT_GREEN_LINK,
-                                               text_color=TEXT_PRIMARY, corner_radius=4,
-                                               command=self._on_mirror_webcam_changed)
-            cb_mirror_webcam.grid(row=r, column=0, padx=16, pady=(8, 2), sticky="w")
+            add_checkbox(live_card, row, "Mirror webcam", self.var_mirror_webcam, self._on_mirror_webcam_changed)
+            row += 1
+
+            add_label(live_card, row, "SCREEN MODE")
+            row += 1
+            self.var_screen_mode = ctk.StringVar(value=self.settings.screen_mode.title())
+            self.dd_screen_mode = add_dropdown(live_card, row, self.var_screen_mode, ["Fit", "Fill", "Crop"], self._on_screen_mode_change)
+            row += 1
+
+            add_label(live_card, row, "TRANSITION")
+            row += 1
+            self.var_transition_style = ctk.StringVar(value=self.settings.transition_style.title())
+            self.dd_transition_style = add_dropdown(live_card, row, self.var_transition_style, ["Fade", "Cut"], self._on_transition_style_change)
+            row += 1
+
+            add_label(live_card, row, "FADE TIME")
+            row += 1
+            self.var_transition_duration = ctk.StringVar(value=str(self.settings.transition_duration))
+            self.dd_transition_duration = add_dropdown(live_card, row, self.var_transition_duration, ["0.15", "0.3", "0.5", "0.75", "1.0"], self._on_transition_duration_change)
+            row += 1
 
             r += 1
+
+            advanced_toggle_card = add_card(sidebar)
+            advanced_toggle_card.grid(row=r, column=0, padx=16, pady=(0, 4), sticky="ew")
+            advanced_toggle_card.grid_columnconfigure(0, weight=1)
+            self.btn_advanced_toggle = ctk.CTkButton(advanced_toggle_card, text="ADVANCED ▼", command=self._toggle_advanced_controls,
+                                                     fg_color=BG_DARK, hover_color=BORDER_STD, text_color=TEXT_PRIMARY,
+                                                     corner_radius=4, height=28)
+            self.btn_advanced_toggle.grid(row=0, column=0, padx=12, pady=10, sticky="ew")
+            r += 1
+
+            self.advanced_frame = add_card(sidebar)
+            self.advanced_frame.grid(row=r, column=0, padx=16, pady=(0, 8), sticky="ew")
+            self.advanced_frame.grid_columnconfigure(0, weight=1)
+            row = 0
+            ctk.CTkLabel(self.advanced_frame, text="ADVANCED", font=ctk.CTkFont(size=9, family="Consolas"), text_color=TEXT_MUTED, anchor="w").grid(row=row, column=0, padx=12, pady=(10, 0), sticky="ew")
+            row += 1
+
+            add_label(self.advanced_frame, row, "TOGGLE HOTKEY")
+            row += 1
+            self.var_hotkey = ctk.StringVar(value=self.settings.hotkey)
+            self.entry_hotkey = add_entry(self.advanced_frame, row, self.var_hotkey, "e.g. ctrl+alt+s")
+            row += 1
+
+            add_label(self.advanced_frame, row, "WEBCAM HOTKEY")
+            row += 1
+            self.var_webcam_hotkey = ctk.StringVar(value=self.settings.webcam_hotkey)
+            self.entry_webcam_hotkey = add_entry(self.advanced_frame, row, self.var_webcam_hotkey, "blank disables")
+            row += 1
+
+            add_label(self.advanced_frame, row, "SCREEN HOTKEY")
+            row += 1
+            self.var_screen_hotkey = ctk.StringVar(value=self.settings.screen_hotkey)
+            self.entry_screen_hotkey = add_entry(self.advanced_frame, row, self.var_screen_hotkey, "blank disables")
+            row += 1
+
+            add_label(self.advanced_frame, row, "IMAGE HOTKEY")
+            row += 1
+            self.var_image_hotkey = ctk.StringVar(value=self.settings.image_hotkey)
+            self.entry_image_hotkey = add_entry(self.advanced_frame, row, self.var_image_hotkey, "blank disables")
+            row += 1
+
             self.var_startup = ctk.BooleanVar(value=self.settings.start_with_windows)
-            cb_startup = ctk.CTkCheckBox(sidebar, text="Start with Windows", variable=self.var_startup,
-                                         fg_color=ACCENT_GREEN, hover_color=ACCENT_GREEN_LINK,
-                                         text_color=TEXT_PRIMARY, corner_radius=4,
-                                         command=self._on_startup_changed)
-            cb_startup.grid(row=r, column=0, padx=16, pady=(8, 2), sticky="w")
+            add_checkbox(self.advanced_frame, row, "Start with Windows", self.var_startup, self._on_startup_changed)
+            row += 1
 
-            r += 1
             self.var_autostart = ctk.BooleanVar(value=self.settings.auto_start_on_load)
-            cb_autostart = ctk.CTkCheckBox(sidebar, text="Auto-start on load", variable=self.var_autostart,
-                                           fg_color=ACCENT_GREEN, hover_color=ACCENT_GREEN_LINK,
-                                           text_color=TEXT_PRIMARY, corner_radius=4,
-                                           command=self._on_autostart_changed)
-            cb_autostart.grid(row=r, column=0, padx=16, pady=(2, 2), sticky="w")
+            add_checkbox(self.advanced_frame, row, "Auto-start on load", self.var_autostart, self._on_autostart_changed)
+            row += 1
 
-            r += 1
             self.var_minimized = ctk.BooleanVar(value=self.settings.start_minimized)
-            cb_minimized = ctk.CTkCheckBox(sidebar, text="Start minimized", variable=self.var_minimized,
-                                           fg_color=ACCENT_GREEN, hover_color=ACCENT_GREEN_LINK,
-                                           text_color=TEXT_PRIMARY, corner_radius=4,
-                                           command=self._on_minimized_changed)
-            cb_minimized.grid(row=r, column=0, padx=16, pady=(2, 2), sticky="w")
+            add_checkbox(self.advanced_frame, row, "Start minimized", self.var_minimized, self._on_minimized_changed)
+            row += 1
+
+            sep2 = ctk.CTkFrame(self.advanced_frame, height=1, fg_color=BORDER_STD)
+            sep2.grid(row=row, column=0, padx=12, pady=(10, 8), sticky="ew")
+            row += 1
+
+            self.btn_install = ctk.CTkButton(self.advanced_frame, text="Install Driver", command=self._on_install_driver,
+                                             fg_color="transparent", border_color=ACCENT_GREEN, border_width=2,
+                                             hover_color=BORDER_STD, text_color=ACCENT_GREEN,
+                                             font=ctk.CTkFont(size=12, weight="bold"), corner_radius=9999, height=30)
+            self.btn_install.grid(row=row, column=0, padx=12, pady=(0, 12), sticky="ew")
+            self.advanced_frame.grid_remove()
+
+            for entry in [self.entry_hotkey, self.entry_webcam_hotkey, self.entry_screen_hotkey, self.entry_image_hotkey]:
+                entry.bind("<FocusOut>", self._on_hotkey_fields_changed)
+                entry.bind("<Return>", self._on_hotkey_fields_changed)
 
             r += 1
-            sep2 = ctk.CTkFrame(sidebar, height=1, fg_color=BORDER_STD)
-            sep2.grid(row=r, column=0, padx=16, pady=(8, 8), sticky="ew")
-            r += 1
-
-            self.btn_install = ctk.CTkButton(sidebar, text="Install Driver", command=self._on_install_driver,
-                                            fg_color="transparent", border_color=ACCENT_GREEN, border_width=2,
-                                            hover_color=BORDER_STD, text_color=ACCENT_GREEN,
-                                            font=ctk.CTkFont(size=12, weight="bold"), corner_radius=9999, height=30)
-            self.btn_install.grid(row=r, column=0, padx=16, pady=(2, 2), sticky="ew")
-            r += 1
-
-            self.btn_toggle = ctk.CTkButton(sidebar, text="START", command=self._on_toggle,
-                                            fg_color=ACCENT_GREEN, hover_color=ACCENT_GREEN_LINK,
-                                            text_color=BG_DEEPER, font=ctk.CTkFont(size=13, weight="bold"),
-                                            corner_radius=9999, height=34)
-            self.btn_toggle.grid(row=r, column=0, padx=16, pady=(4, 8), sticky="ew")
 
             main = ctk.CTkFrame(self, fg_color=BG_DARK, corner_radius=0)
             main.grid(row=0, column=1, sticky="nsew")
@@ -1144,13 +1208,8 @@ def create_app_class():
             status_box.grid(row=0, column=0, pady=(20, 0))
             status_box.grid_columnconfigure(0, weight=1)
 
-            self.status_title = ctk.CTkLabel(status_box, text="Ready", font=ctk.CTkFont(size=18, weight="bold"), text_color=ACCENT_GREEN)
-            self.status_title.grid(row=0, column=0, pady=(0, 2))
-            self.status_detail = ctk.CTkLabel(status_box, text="Configure settings and press START", font=ctk.CTkFont(size=11), text_color=TEXT_MUTED)
-            self.status_detail.grid(row=1, column=0, pady=(0, 8))
-
             info_box = ctk.CTkFrame(status_box, fg_color=BG_DEEPER, corner_radius=4)
-            info_box.grid(row=2, column=0, padx=20, ipady=4)
+            info_box.grid(row=0, column=0, padx=20, ipady=4)
             info_grid = ctk.CTkFrame(info_box, fg_color="transparent")
             info_grid.grid(row=0, column=0, padx=12, pady=4)
 
@@ -1161,7 +1220,7 @@ def create_app_class():
             self.status_backend = ctk.CTkLabel(info_grid, text="Backend: --", font=ctk.CTkFont(size=10, family="Consolas"), text_color=TEXT_SECONDARY)
             self.status_backend.grid(row=0, column=2)
             self.status_dims = ctk.CTkLabel(status_box, text="Frames: in -- -> out --", font=ctk.CTkFont(size=10, family="Consolas"), text_color=TEXT_MUTED)
-            self.status_dims.grid(row=3, column=0, pady=(6, 0))
+            self.status_dims.grid(row=1, column=0, pady=(6, 0))
 
             log_frame = ctk.CTkFrame(main, fg_color=BG_DEEPER, corner_radius=4, border_color=BORDER_STD, border_width=1)
             log_frame.grid(row=5, column=0, padx=12, pady=(8, 12), sticky="nsew")
@@ -1174,15 +1233,20 @@ def create_app_class():
             self.log_text.grid(row=1, column=0, padx=8, pady=(2, 4), sticky="nsew")
             self.log_text.configure(state="disabled")
 
-            for entry in [self.entry_hotkey, self.entry_webcam_hotkey, self.entry_screen_hotkey, self.entry_image_hotkey]:
-                entry.bind("<FocusOut>", self._on_hotkey_fields_changed)
-                entry.bind("<Return>", self._on_hotkey_fields_changed)
-
         def _log(self, msg):
             self.log_text.configure(state="normal")
             self.log_text.insert("end", msg + "\n")
             self.log_text.see("end")
             self.log_text.configure(state="disabled")
+
+        def _toggle_advanced_controls(self):
+            self._advanced_visible = not self._advanced_visible
+            if self._advanced_visible:
+                self.advanced_frame.grid()
+                self.btn_advanced_toggle.configure(text="ADVANCED ▲")
+            else:
+                self.advanced_frame.grid_remove()
+                self.btn_advanced_toggle.configure(text="ADVANCED ▼")
 
         def _refresh_debug_status(self):
             if self.manager:
