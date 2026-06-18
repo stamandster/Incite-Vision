@@ -1094,6 +1094,13 @@ def create_app_class():
             self.dd_backend = add_dropdown(core_card, row, self.var_backend, ["Detecting..."], command=self._on_backend_change)
             row += 1
 
+            self.btn_install = ctk.CTkButton(core_card, text="Install Driver", command=self._on_install_driver,
+                                             fg_color="transparent", border_color=ACCENT_GREEN, border_width=2,
+                                             hover_color=BORDER_STD, text_color=ACCENT_GREEN,
+                                             font=ctk.CTkFont(size=12, weight="bold"), corner_radius=9999, height=30)
+            self.btn_install.grid(row=row, column=0, padx=12, pady=(2, 10), sticky="ew")
+            row += 1
+
             btn_zoom_preset = ctk.CTkButton(core_card, text="Zoom HD Preset", command=self._apply_zoom_hd_preset,
                                             fg_color=BG_DARK, hover_color=BORDER_STD, text_color=TEXT_PRIMARY,
                                             corner_radius=4, height=28)
@@ -1186,11 +1193,6 @@ def create_app_class():
             sep2.grid(row=row, column=0, padx=12, pady=(10, 8), sticky="ew")
             row += 1
 
-            self.btn_install = ctk.CTkButton(self.advanced_frame, text="Install Driver", command=self._on_install_driver,
-                                             fg_color="transparent", border_color=ACCENT_GREEN, border_width=2,
-                                             hover_color=BORDER_STD, text_color=ACCENT_GREEN,
-                                             font=ctk.CTkFont(size=12, weight="bold"), corner_radius=9999, height=30)
-            self.btn_install.grid(row=row, column=0, padx=12, pady=(0, 12), sticky="ew")
             self.advanced_frame.grid_remove()
 
             for entry in [self.entry_hotkey, self.entry_webcam_hotkey, self.entry_screen_hotkey, self.entry_image_hotkey]:
